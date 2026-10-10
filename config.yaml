@@ -1,0 +1,144 @@
+# ==============================================================================
+# HALO (Horizon-Aware Load Optimizer) Configuration File
+# All numerical parameters from Section 4 of the Project Brief are configured here.
+# Never hardcode parameters in source files.
+# ==============================================================================
+
+system:
+  seed: 42
+  log_level: "INFO"
+
+satellite:
+  # Storage capacity in Megabytes (MB)
+  storage_capacity_mb: 500.0
+  # Default image capture interval in seconds (30 to 60 seconds)
+  capture_interval_sec: 45.0
+  # Simulation duration in hours
+  simulation_duration_hours: 24.0
+
+ground_pass:
+  # Window duration in minutes (8 to 12 minutes)
+  pass_duration_min: 10.0
+  # Orbit period / interval between start of ground passes in minutes (90 to 100 minutes)
+  pass_interval_min: 95.0
+  # Downlink data rate in megabits per second (Mbps) or downlink byte budget per pass in MB
+  downlink_budget_mb_per_pass: 80.0
+
+utility_model:
+  # Expiry threshold theta (θ): images with expected value at next pass < theta are pruned
+  expiry_threshold: 0.15
+  # Bounded-wait aging bonus rate beta (β) per hour
+  aging_beta: 0.04
+  # Maximum waiting time cap w_max in hours for the aging bonus
+  aging_w_max_hours: 6.0
+  # Covered area penalty: base score multiplier/value for older images of an alerted region
+  covered_area_base_score: 0.05
+
+decay_rates:
+  # λ per hour for each event type (Section 4 table)
+  # Fire or smoke: λ=1.0/h (half-life ~42 min)
+  fire_or_smoke: 1.0
+  # Ship or vehicle: λ=0.5/h (half-life ~1.4 h)
+  ship_or_vehicle: 0.5
+  # Flood: λ=0.05/h (half-life ~14 h)
+  flood: 0.05
+  # Crop or land use: λ=0.005/h (half-life ~5.8 days)
+  crop_or_land_use: 0.005
+  # Default decay rate for unclassified or regular background terrain
+  default: 0.02
+
+quality_filter:
+  # Quality metric threshold below which images are dropped
+  min_quality_score: 0.35
+  # Maximum allowed cloud coverage ratio (0.0 to 1.0)
+  max_cloud_fraction: 0.60
+  # Minimum blur score (Laplacian variance normalized)
+  min_blur_score: 25.0
+  # Exposure bounds (mean pixel intensity in 0..255)
+  min_mean_luminance: 20.0
+  max_mean_luminance: 240.0
+  # Blank image variance threshold
+  min_variance: 10.0
+
+duplicate_filter:
+  # Minimum change threshold c_thresh between consecutive images of the same tile
+  # Images with change c < min_change_threshold are dropped as near-duplicates
+  min_change_threshold: 0.12
+  # Structural similarity index (SSIM) threshold above which image is considered duplicate
+  max_duplicate_similarity: 0.88
+
+model:
+  architecture: "mobilenet_v2"
+  num_classes: 10
+  int8_quantization: true
+  model_path: "models/halo_mobilenet_v2_int8.pt"
+  full_precision_path: "models/halo_mobilenet_v2_fp32.pt"
+  # Usefulness mapping m_k per scene class (0.0 to 1.0)
+  class_usefulness:
+    fire: 1.00
+    flood: 0.90
+    ship_harbor: 0.85
+    highway_infrastructure: 0.70
+    industrial: 0.65
+    residential: 0.50
+    forest: 0.45
+    annual_crop: 0.35
+    permanent_crop: 0.35
+    cloudy_or_blank: 0.05
+
+alerts:
+  # Default boost multiplier A_i applied to matching images when alert is active
+  default_boost: 2.5
+  # Simulated ground alerts injected during the mission
+  scenario_alerts:
+    - alert_id: "ALT-001"
+      delivery_pass_index: 2
+      region_tile: "TILE-04"
+      event_type: "fire_or_smoke"
+      boost_factor: 3.0
+      duration_hours: 3.0
+    - alert_id: "ALT-002"
+      delivery_pass_index: 5
+      region_tile: "TILE-11"
+      event_type: "flood"
+      boost_factor: 2.2
+      duration_hours: 12.0
+
+events:
+  # Injected environmental events for simulation
+  scenario_events:
+    - event_id: "EVT-FIRE-01"
+      start_hour: 4.5
+      duration_hours: 3.5
+      tile_id: "TILE-04"
+      event_type: "fire_or_smoke"
+      ground_truth_importance: 1.0
+    - event_id: "EVT-FLOOD-01"
+      start_hour: 10.0
+      duration_hours: 14.0
+      tile_id: "TILE-11"
+      event_type: "flood"
+      ground_truth_importance: 0.9
+    - event_id: "EVT-SHIP-01"
+      start_hour: 15.0
+      duration_hours: 4.0
+      tile_id: "TILE-08"
+      event_type: "ship_or_vehicle"
+      ground_truth_importance: 0.85
+
+scheduler:
+  # Primary scheduler algorithm: 'greedy' or 'knapsack'
+  default_algorithm: "greedy"
+  # Knapsack byte discretisation unit (bytes per discretization step for exact DP)
+  knapsack_discretization_kb: 50
+
+storage:
+  # Eviction strategy: 'halo' (sent first, then lowest score per byte), 'fifo', 'lru'
+  eviction_policy: "halo"
+
+experiments:
+  # Number of random seeds to evaluate across runs
+  num_seeds: 10
+  seed_list: [42, 101, 202, 303, 404, 505, 606, 707, 808, 909]
+  results_dir: "experiments/results"
+  figures_dir: "experiments/figures"
